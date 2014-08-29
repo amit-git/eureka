@@ -14,12 +14,24 @@
  * limitations under the License.
  */
 
-package com.netflix.eureka.server.transport;
+package com.netflix.eureka.server.transport.discovery.asynchronous;
+
+import com.netflix.karyon.transport.tcp.KaryonTcpModule;
+import io.reactivex.netty.servo.ServoEventsListenerFactory;
 
 /**
- * Context identifies a server side connection from a client.
- *
  * @author Tomasz Bak
  */
-public class Context {
+public class AvroDiscoveryModule extends KaryonTcpModule<Object, Object> {
+
+    public AvroDiscoveryModule() {
+        super("avroDiscoveryServer", Object.class, Object.class);
+    }
+
+    @Override
+    protected void configureServer() {
+        bindConnectionHandler().to(AsyncDiscoveryHandler.class);
+        bindEventsListenerFactory().to(ServoEventsListenerFactory.class);
+        server().port(7003);
+    }
 }

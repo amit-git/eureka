@@ -41,12 +41,8 @@ apply plugin: 'idea'
 
 subprojects {
 
-    sourceCompatibility = JavaVersion.VERSION_1_6
-    targetCompatibility = JavaVersion.VERSION_1_6
-
     group = "com.netflix.eureka"
 
-    apply plugin: 'java'
     apply plugin: 'osgi'
     apply plugin: 'groovy'
 
