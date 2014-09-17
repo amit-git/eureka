@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<style>
+
+  body {
+    font: 10px sans-serif;
+  }
+
+  .arc path {
+    stroke: #fff;
+  }
+
+  #right-col {
+    display: inline-block;
+    margin-left: 150px;
+  }
+
+  #left-col {
+    float: left;
+  }
+
+  #error-5xx-metric,
+  #reg-size-metric,
+  #num-conn-metric {
+    position: relative;
+  }
+
+  #error-5xx,
+  #reg-size,
+  #num-conn {
+    position: relative;
+    left: 40px;
+  }
+
+  #error-5xx-y_axis,
+  #reg-size-y_axis,
+  #num-conn-y_axis {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40px;
+  }
+
+  section h3 {
+    text-align: left;
+    margin-left: 20px;
+    text-decoration: underline;
+  }
+
+  section h2 {
+    font-size: x-large;
+    text-align: center;
+  }
+
+</style>
+<link type="text/css" rel="stylesheet" href="lib/rickshaw.min.css"/>
+<script src="lib/d3.v3.js"></script>
+<script src="lib/rickshaw.min.js"></script>
+<script src="cluster-chart.js"></script>
+<script src="metrics-chart.js"></script>
+<script src="registry-view.js"></script>
+<body>
+<script type="text/javascript">
+  d3.csv("sample.csv", function (error, data) {
+
+    function loadNumConnectionsChart() {
+      var metricsChart = MetricsChart({
+        containerId: 'num-conn',
+        width      : 350,
+        height     : 150
+      });
+      metricsChart.loadData("num-connections");
+      metricsChart.render();
+    }
+
+    function loadRegSizeChart() {
+      var metricsChart = MetricsChart({
+        containerId: 'reg-size',
+        width      : 350,
+        height     : 150
+      });
+      metricsChart.loadData("reg-size");
+      metricsChart.render();
+    }
+
+    function load5xxChart() {
+      var metricsChart = MetricsChart({
+        containerId: 'error-5xx',
+        width      : 350,
+        height     : 150
+      });
+      metricsChart.loadData("error-5xx");
+      metricsChart.render();
+    }
+
+    loadNumConnectionsChart();
+    loadRegSizeChart();
+    load5xxChart();
+
+    var clustersView = ClusterStatusChart({containerId: 'cluster-view', width: 400});
+
+    // fetch registry data and start rendering charts
+    var registryView = RegistryView({containerId: 'reg-view', diameter: 800}).loadData(function(data) {
+      registryView.render();
+      clustersView.loadData(data.values.servers).render();
+    });
+
+  });
+
+
+</script>
+
+<div class="main-cont">
+  <div id="left-col">
+    <section><h2>Discovery cluster</h2>
+      <div id="cluster-view"></div>
+    </section>
+    <section><h3>Number of active connections</h3>
+      <div id="num-conn-metric">
+        <div id="num-conn-y_axis"></div>
+        <div id="num-conn"></div>
+      </div>
+    </section>
+
+    <section><h3>Registry size</h3>
+      <div id="reg-size-metric">
+        <div id="reg-size-y_axis"></div>
+        <div id="reg-size"></div>
+      </div>
+    </section>
+
+    <section><h3>5xx count</h3>
+      <div id="error-5xx-metric">
+        <div id="error-5xx-y_axis"></div>
+        <div id="error-5xx"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="right-col">
+    <section><h2>Registry</h2>
+      <div id="reg-view"></div>
+     </section>
+  </div>
+
+
+</div>
+
+</body>
