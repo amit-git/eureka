@@ -5,11 +5,12 @@
   (:use [clojure.core.async :only [go put! <! >! chan <!!]])
   (:require [org.httpkit.client :as http]
             [rx.lang.clojure.core :as rx]
+            [eureka.dashboard.cloud-env :as cloud-env]
             [clojure.data.json :as json]))
-
 
 (def lease-expiration-str "Lease expiration enabled: true")
 (def timer-subscription (atom nil))
+(def system-env (cloud-env/getEnv))
 
 (defn http-get [url]
   (let [c (chan)]
@@ -19,17 +20,16 @@
     c))
 
 (defn get-discovery-eips
-  ([] (get-discovery-eips "test"))
-  ([env]
-    (go
-      (let [json-payload (-> (format "http://eipapi.%s.netflix.net/api/v1/eip/us-east-1" env)
-                           http-get
-                           <!
-                           :body (json/read-str))]
-        (->> json-payload
-          (filter
-            (fn [[_ v]] (= v "discovery")))
-          (map first))))))
+  []
+  (go
+    (let [json-payload (-> (format "http://eipapi.%s.netflix.net/api/v1/eip/%s" (:env system-env) (:region system-env))
+                         http-get
+                         <!
+                         :body (json/read-str))]
+      (->> json-payload
+        (filter
+          (fn [[_ v]] (= v "discovery")))
+        (map first)))))
 
 
 (defn get-discovery-status

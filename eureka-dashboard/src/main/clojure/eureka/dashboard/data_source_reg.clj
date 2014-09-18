@@ -4,16 +4,22 @@
            [rx.subjects BehaviorSubject])
   (:use [clojure.core.async :only [put! go >! chan <! <!!]])
   (:require [eureka.dashboard.discovery-status :as discovery]
+            [eureka.dashboard.cloud-env :as cloud-env]
             [org.httpkit.client :as http]
             [rx.lang.clojure.core :as rx]
             [clojure.data.json :as json]))
 
 (def rand-num (java.util.Random.))
 
+(def system-env (cloud-env/getEnv))
+(def atlas-5xx-count-metric (format "http://atlas-main.%s.%s.netflix.net:7001/api/v2/fetch?q=nf.region,%s,:eq,nf.app,discovery,:eq,:and,name,EpicAgent_ApacheAccessLog_all_5xx_Count,:eq,:and,:sum&e=now-5m&s=e-3h"
+                              (:region system-env) (:env system-env) (:region system-env)))
+(def atlas-connections-metric (format "http://atlas-main.%s.%s.netflix.net:7001/api/v2/fetch?q=nf.region,%s,:eq,nf.app,discovery,:eq,:and,state,Keepalive,:eq,:and,name,Scoreboard,:eq,:and,:sum&e=now-5m&s=e-3h"
+                                (:region system-env) (:env system-env) (:region system-env)))
+(def atlas-registry-size-metric (format "http://atlas-main.%s.%s.netflix.net:7001/api/v2/fetch?q=nf.region,%s,:eq,nf.app,discovery,:eq,:and,name,PeerAwareInstanceRegistry_numOfElementsinInstanceCache,:eq,:and,:sum&e=now-5m&s=e-3h"
+                                  (:region system-env) (:env system-env) (:region system-env)))
 
-(def atlas-5xx-count-metric "http://atlas-main.us-east-1.prod.netflix.net:7001/api/v2/fetch?q=nf.region,us-east-1,:eq,nf.app,discovery,:eq,:and,name,EpicAgent_ApacheAccessLog_all_5xx_Count,:eq,:and,:sum&e=now-5m&s=e-3h")
-(def atlas-connections-metric "http://atlas-main.us-east-1.prod.netflix.net:7001/api/v2/fetch?q=nf.region,us-east-1,:eq,nf.app,discovery,:eq,:and,state,Keepalive,:eq,:and,name,Scoreboard,:eq,:and,:sum&e=now-5m&s=e-3h")
-(def atlas-registry-size-metric "http://atlas-main.us-east-1.prod.netflix.net:7001/api/v2/fetch?q=nf.region,us-east-1,:eq,nf.app,discovery,:eq,:and,name,PeerAwareInstanceRegistry_numOfElementsinInstanceCache,:eq,:and,:sum&e=now-5m&s=e-3h")
+(def timer-subscriptions (atom #{}))
 
 (defn is-data-line
   [resp-line]
@@ -66,12 +72,13 @@
       (if-not (nil? @observable) @observable
         (let [bs (BehaviorSubject/create (:name data-src))
               ro (Observable/timer 0 1 TimeUnit/MINUTES)
-              _  (rx/subscribe ro
+              ts (rx/subscribe ro
                    (fn [v]
                      (println "Making async call for " (:metric-url data-src))
                      (http/get (:metric-url data-src)
                        (fn [res] (.onNext bs (build-atlas-data res data-src))))))]
           (reset! observable bs)
+          (swap! timer-subscriptions conj ts)
           bs)
         ))))
 
@@ -99,9 +106,15 @@
   (reg-size-o)
   (num-conn-o))
 
+(defn shutdown
+  []
+  (map
+    #(.unsubscribe %)
+    @timer-subscriptions))
+
 
 (comment
   (def co (get-data {:name "reg-size"}))
   (def sub (rx/subscribe co (fn [v] (println "Got Metric " v))))
   (rx/unsubscribe sub)
-  (.printStackTrace *e) )
+  (.printStackTrace *e))

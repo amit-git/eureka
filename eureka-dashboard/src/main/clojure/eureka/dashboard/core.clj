@@ -46,6 +46,12 @@
 (defn startServer [port]
   (reset! server (run-server (site #'all-routes) {:port port})))
 
+(defn shutdown
+  []
+  (stop-server)
+  (discovery/shutdown-discovery-stream)
+  (data-sources/shutdown))
+
 (defn -main []
   (println "Starting websocket server on port 9000")
   (startServer 9000)
@@ -55,9 +61,8 @@
   (println "Data sources initialized"))
 
 (comment
-  (startServer 9000)
-  (.printStackTrace *e)
-  (stop-server)
+  (-main)
+  (shutdown)
 
   (def cr "{\"cmd\" : \"getStream\", \"ds\" : \"num-connections\"}")
   (def cr "{\"cmd\" : \"getStream\", \"ds\" : \"5xx\"}")
