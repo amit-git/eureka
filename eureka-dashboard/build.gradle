@@ -14,15 +14,32 @@
  * limitations under the License.
  */
 
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url 'http://clojars.org/repo'  }
+    }
+    dependencies {
+        classpath 'clojuresque:clojuresque:1.7.0'
+    }
+}
 
+repositories { 
+    mavenCentral()
+    maven { url 'http://clojars.org/repo'  }
+}
+
+apply plugin: 'clojure'
+clojure.aotCompile = true
+
+uberjar.enabled = true
+
+apply plugin:'application'
+mainClassName = "eureka.dashboard.core__init"
 
 dependencies {
-    compile project(':eureka-client')
     compile "com.netflix.karyon:karyon-governator:${karyon_version}"
     compile "com.netflix.karyon:karyon-archaius:${karyon_version}"
-    compile "com.netflix.rxnetty:rx-netty:0.3.12"
-
-    compile 'com.netflix.ribbon:ribbon:2.0-RC7'
 
     compile 'org.eclipse.jetty:jetty-server:9.2.2.v20140723'
     compile 'org.eclipse.jetty:jetty-servlet:9.2.2.v20140723'
@@ -46,3 +63,27 @@ jar {
         instruction 'Import-Package', '!org.junit,!junit.framework,!org.mockito.*,*'
     }
 }
+
+uberjar {
+    manifest {
+        attributes('Main-Class': 'eureka.dashboard.core')
+    }
+}
+
+
+
+def nreplPort = 9999
+configurations { nrepl  }
+dependencies { nrepl 'org.clojure:tools.nrepl:0.2.1'  }
+task nrepl(type: JavaExec) {
+    classpath configurations.nrepl.asPath,
+              project.sourceSets.main.clojure.srcDirs,
+              project.sourceSets.test.clojure.srcDirs,
+              sourceSets.main.runtimeClasspath
+                  main = "clojure.main"
+                  args '--eval', "(ns gradle-nrepl (:require [clojure.tools.nrepl.server :refer (start-server stop-server)]))",
+              '--eval', "(println \"Starting nrepl server on port $nreplPort\")",
+              '--eval', "(def server (start-server :port $nreplPort))"
+
+}
+// vim:ft=groovy
