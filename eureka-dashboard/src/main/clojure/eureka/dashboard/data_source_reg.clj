@@ -5,6 +5,7 @@
   (:use [clojure.core.async :only [put! go >! chan <! <!!]])
   (:require [eureka.dashboard.discovery-status :as discovery]
             [eureka.dashboard.cloud-env :as cloud-env]
+            [clojure.tools.logging :as log]
             [org.httpkit.client :as http]
             [rx.lang.clojure.core :as rx]
             [clojure.data.json :as json]))
@@ -74,7 +75,7 @@
               ro (Observable/timer 0 1 TimeUnit/MINUTES)
               ts (rx/subscribe ro
                    (fn [v]
-                     (println "Making async call for " (:metric-url data-src))
+                     (log/debug "Making async call for " (:metric-url data-src))
                      (http/get (:metric-url data-src)
                        (fn [res] (.onNext bs (build-atlas-data res data-src))))))]
           (reset! observable bs)
@@ -111,7 +112,6 @@
   (map
     #(.unsubscribe %)
     @timer-subscriptions))
-
 
 (comment
   (def co (get-data {:name "reg-size"}))

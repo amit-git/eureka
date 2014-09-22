@@ -87,6 +87,12 @@ function MetricsChart(options) {
                 }
             }
         };
+
+        webSocket.onerror = function(err) {
+            console.log("got error ");
+            console.log(err);
+        };
+
     }
 
     init();

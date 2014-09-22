@@ -5,6 +5,7 @@
   (:use [clojure.core.async :only [go put! <! >! chan <!!]])
   (:require [org.httpkit.client :as http]
             [rx.lang.clojure.core :as rx]
+            [clojure.tools.logging :as log]
             [eureka.dashboard.cloud-env :as cloud-env]
             [clojure.data.json :as json]))
 
@@ -14,7 +15,7 @@
 
 (defn http-get [url]
   (let [c (chan)]
-    (println "Fetching " url)
+    (log/debug "Fetching " url)
     (http/get url
       (fn [r] (put! c r)))
     c))

@@ -8,20 +8,21 @@
     (is (= (:env res) "test"))
     (is (= (:region res) "us-east-1"))))
 
+
 (deftest verify-env
   []
-  (with-redefs [System/getenv (doto (java.util.HashMap.) "NETFLIX_ENVIRONMENT" "prod")]
+  (with-redefs [get-sys-env (fn [] (doto (java.util.HashMap.) (.put "NETFLIX_ENVIRONMENT" "prod")))]
     (let [res (getEnv)]
       (is (= (:env res)) "prod")
       (is (= (:region res) "us-east-1")))))
 
-
 (deftest verify-region
   []
-  (with-redefs [System/getenv (doto (java.util.HashMap.) "EC2_REGION" "us-west-2")]
+  (with-redefs [get-sys-env (fn [] (doto (java.util.HashMap.) (.put "EC2_REGION" "us-west-2")))]
     (let [res (getEnv)]
       (is (= (:env res)) "test")
       (is (= (:region res) "us-west-2")))))
+
 
 (comment
   (run-tests))
