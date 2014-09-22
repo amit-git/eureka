@@ -28,7 +28,7 @@
   (with-channel request channel
     (on-close channel (fn [status] (log/debug "channel closed: " status) (sub-svr/unsubscribe channel)))
     (on-receive channel (fn [client-req]
-                          (log/debug "handling web socket receiv in " (.getId (Thread/currentThread)))
+                          (log/debug "handling web socket received in " (.getId (Thread/currentThread)))
                           (if-let [data-src (get-ds client-req)]
                             (sub-svr/subscribe channel data-src))))))
 
@@ -47,29 +47,31 @@
     (@server :timeout 100)
     (reset! server nil)))
 
+(defn stop-nrepl-server []
+  (when-not (nil? @nrepl-server)
+    (nrepl/stop-server @nrepl-server)
+    (reset! nrepl-server nil)))
+
 (defn start-app-server [port]
-  (reset! server (run-server #'app {:port port}))
-  (future (reset! nrepl-server (nrepl/start-server :port 7888))))
+  (reset! server (run-server #'app {:port port})))
 
 (defn shutdown
   []
   (stop-app-server)
-  (nrepl/stop-server nrepl-server)
+  (stop-nrepl-server)
   (discovery/shutdown-discovery-stream)
   (data-sources/shutdown))
 
 
 (defn -main [& args]
-  (let [port (Integer/parseInt(first args))]
+  (let [port (Integer/parseInt (first args))]
     (log/info (str "Starting websocket server on port " port))
     (start-app-server port)
+    (future (reset! nrepl-server (nrepl/start-server :port 7888)))
     (discovery/init-discovery-stream)
     (data-sources/init-atlas-datasources)
     (log/info "Data sources initialized")))
 
-  (comment
-    (-main "9000")
-    (shutdown)
-    )
-
-
+(comment
+  (-main "9000")
+  (shutdown))

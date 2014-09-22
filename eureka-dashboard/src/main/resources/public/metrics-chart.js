@@ -6,21 +6,7 @@ function MetricsChart(options) {
     var height = options.height || 240;
     var palette = new Rickshaw.Color.Palette();
 
-    var data = [
-         /*
-         { x: -1893456000, y: 25868573 },
-         { x: -1577923200, y: 29662053 },
-         { x: -1262304000, y: 34427091 },
-         { x: -946771200, y: 35976777 },
-         { x: -631152000, y: 39477986 },
-         { x: -315619200, y: 44677819 },
-         { x: 0, y: 49040703 },
-         { x: 315532800, y: 49135283 },
-         { x: 631152000, y: 50809229 },
-         { x: 946684800, y: 53594378 },
-         { x: 1262304000, y: 55317240 }
-         */
-    ];
+    var data = [];
 
     var graph; // chart obj
 
@@ -64,7 +50,8 @@ function MetricsChart(options) {
     function loadData(dataSrc) {
         webSocket = new WebSocket("ws://localhost:9000/sub");
 
-        webSocket.onopen = function () {
+        webSocket.onopen = function (evt) {
+            console.log("On open (" + dataSrc + ")");
             webSocket.send(JSON.stringify({cmd: "getStream", ds: dataSrc}));
         };
 
