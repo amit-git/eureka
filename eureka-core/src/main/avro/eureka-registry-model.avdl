@@ -1,0 +1,49 @@
+@namespace("com.netflix.eureka.registry")
+protocol EurekaRegistryModel {
+
+    @namespace("com.netflix.eureka.registry.InstanceInfo$")
+    enum Status {
+        UP, DOWN, STARTING, OUT_OF_SERVICE, UNKNOWN
+    }
+
+    @namespace("com.netflix.eureka.registry.NetworkAddress$")
+    enum ProtocolType {
+        IPv4, IPv6
+    }
+
+    record NetworkAddress {
+        com.netflix.eureka.registry.NetworkAddress$.ProtocolType protocolType;
+        boolean publicAddress;
+        union {null, string} ipAddress;
+        union {null, string} hostName;
+    }
+
+    record AwsDataCenterInfo {
+        string region;
+        string zone;
+        string placementGroup;
+        string amiId;
+        string instanceId;
+        string instanceType;
+        @java-class("java.util.ArrayList") array<NetworkAddress> addresses;
+    }
+
+    record InstanceInfo {
+        string id;
+        string appGroup;
+        string app;
+        string asg;
+        string vipAddress;
+        string secureVipAddress;
+        string hostname;
+        string ip;
+        @java-class("java.util.HashSet") array<int> ports;
+        @java-class("java.util.HashSet") array<int> securePorts;
+        com.netflix.eureka.registry.InstanceInfo$.Status status;
+        string homePageUrl;
+        string statusPageUrl;
+        @java-class("java.util.HashSet") array<string> healthCheckUrls;
+        long version;
+        union {AwsDataCenterInfo} dataCenterInfo;
+    }
+}

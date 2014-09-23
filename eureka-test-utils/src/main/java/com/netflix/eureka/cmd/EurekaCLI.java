@@ -16,25 +16,43 @@
 
 package com.netflix.eureka.cmd;
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import com.netflix.eureka.client.BootstrapResolver;
-import com.netflix.eureka.client.bootstrap.StaticBootstrapResolver;
-import com.netflix.eureka.client.service.EurekaServiceImpl;
-import com.netflix.eureka.client.transport.discovery.DiscoveryClientProvider;
-import com.netflix.eureka.client.transport.registration.RegistrationClientProvider;
+import com.netflix.eureka.client.EurekaClient;
+import com.netflix.eureka.client.EurekaClientImpl;
+import com.netflix.eureka.client.ServerResolver.Protocol;
+import com.netflix.eureka.client.bootstrap.StaticServerResolver;
+import com.netflix.eureka.client.transport.TransportClient;
+import com.netflix.eureka.client.transport.TransportClients;
+import com.netflix.eureka.interests.ChangeNotification;
+import com.netflix.eureka.interests.Interest;
+import com.netflix.eureka.interests.Interests;
+import com.netflix.eureka.registry.Delta;
+import com.netflix.eureka.registry.Delta.Builder;
+import com.netflix.eureka.registry.InstanceInfo;
+import com.netflix.eureka.registry.InstanceInfoField;
+import com.netflix.eureka.registry.InstanceInfoField.Name;
 import com.netflix.eureka.registry.SampleInstanceInfo;
-import com.netflix.eureka.service.RegistrationChannel;
 import com.netflix.eureka.transport.EurekaTransports.Codec;
+import com.netflix.eureka.utils.Sets;
 import jline.Terminal;
 import jline.TerminalFactory;
 import jline.console.ConsoleReader;
+import jline.console.history.History;
+import jline.console.history.History.Entry;
 import rx.Subscriber;
+import rx.observers.SafeSubscriber;
 
-import static java.util.Collections.*;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.LineNumberReader;
+import java.net.InetSocketAddress;
+import java.util.Arrays;
+import java.util.ListIterator;
+import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Simple command line Eureka client interface.
@@ -43,16 +61,93 @@ import static java.util.Collections.*;
  */
 public class EurekaCLI {
 
-    private final ConsoleReader consoleReader;
+    private static final File CONFIGURATION_FILE =
+            System.getProperty("user.home") == null ? null : new File(System.getProperty("user.home"), ".eurekarc");
 
-    private EurekaServiceImpl eurekaService;
-    private volatile RegistrationChannel registrationChannel;
-    private AtomicInteger idGenerator = new AtomicInteger(1);
+    private static final File HISTORY_FILE =
+            System.getProperty("user.home") == null ? null : new File(System.getProperty("user.home"), ".eureka_history");
+
+    private static final Pattern ALIAS_DEF_PATTERN = Pattern.compile("\\s*alias\\s+(\\w+)=(.*)");
+
+    private enum Status {NotStarted, Initiated, Streaming, Complete, Failed}
+
+    private final ConsoleReader consoleReader;
+    private TreeMap<String, String> aliasMap = new TreeMap<>();
+
+    private static final AtomicInteger streamId = new AtomicInteger(0);
+    private volatile InstanceInfo lastInstanceInfo;
+    private EurekaClient eurekaClient;
+    private Status registrationStatus = Status.NotStarted;
+    private Status registryFetchStatus = Status.NotStarted;
 
     public EurekaCLI() throws IOException {
         Terminal terminal = TerminalFactory.create();
         terminal.setEchoEnabled(false);
         consoleReader = new ConsoleReader(System.in, System.out, terminal);
+        loadConfiguration();
+        loadHistory();
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                eurekaClient.close();
+            }
+        }));
+    }
+
+    private void loadConfiguration() {
+        if (CONFIGURATION_FILE != null && CONFIGURATION_FILE.exists()) {
+            try {
+                try (LineNumberReader reader = new LineNumberReader(new FileReader(CONFIGURATION_FILE))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        Matcher matcher = ALIAS_DEF_PATTERN.matcher(line);
+                        if (matcher.matches()) {
+                            aliasMap.put(matcher.group(1), matcher.group(2));
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("ERROR: could not load configuration file from ~/.eureka_history");
+            }
+        }
+    }
+
+    private void loadHistory() {
+        if (HISTORY_FILE != null && HISTORY_FILE.exists()) {
+            try {
+                try (LineNumberReader reader = new LineNumberReader(new FileReader(HISTORY_FILE))) {
+                    History history = consoleReader.getHistory();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        history.add(line);
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("ERROR: could not load history file from ~/.eureka_history");
+            }
+        }
+    }
+
+    private void saveHistory() {
+        if (HISTORY_FILE != null) {
+            if (HISTORY_FILE.exists()) {
+                boolean deleted = HISTORY_FILE.delete();
+                if (!deleted) {
+                    System.err.println("Failed to delete the history file.");
+                }
+            }
+            try {
+                ListIterator<Entry> iterator = consoleReader.getHistory().entries();
+                try (FileWriter writer = new FileWriter(HISTORY_FILE)) {
+                    while (iterator.hasNext()) {
+                        writer.write(iterator.next().value().toString());
+                        writer.write('\n');
+                    }
+                }
+            } catch (IOException e) {
+                System.err.println("ERROR: could not save history file into ~/.eureka_history");
+            }
+        }
     }
 
     public void readExecutePrintLoop() throws IOException {
@@ -60,25 +155,63 @@ public class EurekaCLI {
         while (true) {
             String line = consoleReader.readLine("> ");
             if (line != null && !(line = line.trim()).isEmpty()) {
-                String[] parts = line.split("\\s+");
-                String cmd = parts[0];
-                String[] args = Arrays.copyOfRange(parts, 1, parts.length);
-                if ("quit".equals(cmd)) {
-                    System.out.println("Terminatting...");
+                if (executeLine(line)) {
                     return;
-                } else if ("help".equals(cmd) && expect(cmd, 0, args)) {
-                    runHelp();
-                } else if ("connect".equals(cmd) && expect(cmd, 3, args)) {
-                    runConnect(args);
-                } else if ("register".equals(cmd) && expect(cmd, 0, args)) {
-                    runRegister();
-                } else if ("close".equals(cmd) && expect(cmd, 0, args)) {
-                    runClose();
-                } else if ("status".equals(cmd) && expect(cmd, 0, args)) {
-                    runStatus();
                 }
             }
         }
+    }
+
+    private boolean executeLine(String line) {
+        for (String cmdLine : line.split("&&")) {
+            if (!executeCommand(cmdLine)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean executeCommand(String cmdLine) {
+        if ((cmdLine = cmdLine.trim()).isEmpty()) {
+            return true;
+        }
+
+        if (aliasMap.containsKey(cmdLine)) {
+            executeLine(aliasMap.get(cmdLine));
+        }
+
+        String[] parts = cmdLine.split("\\s+");
+        String cmd = parts[0];
+        String[] args = Arrays.copyOfRange(parts, 1, parts.length);
+        if ("quit".equals(cmd)) {
+            saveHistory();
+            System.out.println("Terminatting...");
+            return false;
+        }
+        try {
+            if ("help".equals(cmd) && expect(cmd, 0, args)) {
+                runHelp();
+            } else if ("history".equals(cmd) && expect(cmd, 0, args)) {
+                runHistory();
+            } else if ("connect".equals(cmd)) {
+                runConnect(args);
+            } else if ("register".equals(cmd) && expect(cmd, 0, args)) {
+                runRegister();
+            } else if ("update".equals(cmd) && expect(cmd, 2, args)) {
+                runUpdate(args);
+            } else if ("close".equals(cmd) && expect(cmd, 0, args)) {
+                runClose();
+            } else if ("status".equals(cmd) && expect(cmd, 0, args)) {
+                runStatus();
+            } else if ("interestAll".equals(cmd) && expect(cmd, 0, args)) {
+                listenForRegistry(Interests.forFullRegistry());
+            } else if ("interest".equals(cmd) && atLeast(cmd, 1, args)) {
+                listenForInterest(args);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return true;
     }
 
     private boolean expect(String cmd, int expectedArgs, String[] args) {
@@ -89,85 +222,291 @@ public class EurekaCLI {
         return true;
     }
 
+    private boolean atLeast(String cmd, int atLeastArgs, String[] args) {
+        if (args.length < atLeastArgs) {
+            System.err.println(String.format("ERROR: command %s expects at least %d arguments", cmd, atLeastArgs));
+            return false;
+        }
+        return true;
+    }
+
     private void runHelp() {
         System.out.println("Available commands:");
         System.out.println("  close                                                close all channels        ");
         System.out.println("  connect <host> <registration_port> <discovery_port>  ports: 7002, 7003         ");
         System.out.println("  help                                                 print this help           ");
+        System.out.println("  history                                              print previous commands   ");
         System.out.println("  quit                                                 exit                      ");
         System.out.println("  register                                             register with server      ");
+        System.out.println("  update <field> <value>                               update own registry entry ");
         System.out.println("  status                                               print status summary      ");
+        System.out.println("  interestAll                                          start intrest subscription for all");
+        System.out.println("  interestNone                                         stop intrest subscription for all");
+        System.out.println("  interest <vipName> <vipName> ...                     start interest subscription for given vips");
+
+        if (!aliasMap.isEmpty()) {
+            System.out.println();
+            System.out.println("Aliases");
+            for (String key : aliasMap.keySet()) {
+                System.out.format("  %-52s %s\n", key, aliasMap.get(key));
+            }
+        }
+    }
+
+    private void runHistory() {
+        for (int i = 0; i < consoleReader.getHistory().size(); i++) {
+            System.out.println(String.format("%4d %s", i + 1, consoleReader.getHistory().get(i)));
+        }
     }
 
     private void runConnect(String[] args) {
-        String host = args[0];
-        int registrationPort = Integer.parseInt(args[1]);
-        int discoveryPort = Integer.parseInt(args[2]);
 
-        BootstrapResolver<InetSocketAddress> registratonBootstrap =
-                new StaticBootstrapResolver<InetSocketAddress>(singletonList(new InetSocketAddress(host, registrationPort)));
-        RegistrationClientProvider<InetSocketAddress> registrationClientProvider =
-                RegistrationClientProvider.tcpClientProvider(registratonBootstrap, Codec.Json);
+        String host = "localhost";
+        int registrationPort = 7002;
+        int discoveryPort = 7003;
 
-        BootstrapResolver<InetSocketAddress> discoveryBootstrap =
-                new StaticBootstrapResolver<InetSocketAddress>(singletonList(new InetSocketAddress(host, discoveryPort)));
-        DiscoveryClientProvider<InetSocketAddress> discoveryClientProvider =
-                DiscoveryClientProvider.tcpClientProvider(discoveryBootstrap, Codec.Json);
+        switch (args.length) {
+            case 0:
+                // defaults are already set
+                break;
+            case 1:
+                host = args[0];
+                break;
+            case 2:
+                host = args[0];
+                registrationPort = Integer.parseInt(args[1]);
+                break;
+            default:
+                host = args[0];
+                registrationPort = Integer.parseInt(args[1]);
+                discoveryPort = Integer.parseInt(args[2]);
+                break;
+        }
 
-        eurekaService = new EurekaServiceImpl(discoveryClientProvider, registrationClientProvider);
+        InetSocketAddress writeHost = new InetSocketAddress(host, registrationPort);
+        InetSocketAddress readHost = new InetSocketAddress(host, discoveryPort);
+
+        StaticServerResolver<InetSocketAddress> registryServers = new StaticServerResolver<>();
+        registryServers.addServer(writeHost, Protocol.TcpRegistration);
+        TransportClient writeClient =
+                TransportClients.newTcpRegistrationClient(registryServers, Codec.Json);
+
+        StaticServerResolver<InetSocketAddress> discoveryServers = new StaticServerResolver<>();
+        discoveryServers.addServer(readHost, Protocol.TcpDiscovery);
+        TransportClient readClient =
+                TransportClients.newTcpDiscoveryClient(discoveryServers, Codec.Json);
+
+        eurekaClient = new EurekaClientImpl(writeClient, readClient);
+
+        System.out.format("Connected to Eureka server at %s:%d (registry) and %s:%d (discovery)\n", host,
+                          registrationPort, host, discoveryPort);
     }
 
     private void runRegister() {
-        if (eurekaService == null) {
-            System.out.println("ERROR: connect first to Eureka server");
+        if (!isConnected() || !expectedRegistrationStatus(Status.NotStarted, Status.Failed)) {
             return;
         }
-        registrationChannel = eurekaService.newRegistrationChannel();
-        registrationChannel.asLifecycleObservable().subscribe(new Subscriber<Void>() {
+
+        registrationStatus = Status.Initiated;
+        lastInstanceInfo = SampleInstanceInfo.CliServer.builder()
+//                .withId(Integer.toString(idGenerator.getAndIncrement()))
+                .build();
+        eurekaClient.register(lastInstanceInfo)
+                .subscribe(new Subscriber<Void>() {
+                    @Override
+                    public void onCompleted() {
+                        System.out.println("Successfuly registered with Eureka server");
+                        registrationStatus = Status.Complete;
+                    }
+
+                    @Override
+                    public void onError(Throwable e) {
+                        System.out.println("ERROR: Registration failed.");
+                        e.printStackTrace();
+                        registrationStatus = Status.Failed;
+                    }
+
+                    @Override
+                    public void onNext(Void aVoid) {
+                        // No op
+                    }
+                });
+    }
+
+    private void runUpdate(String[] args) {
+        if (!isConnected() || !expectedRegistrationStatus(Status.Complete)) {
+            return;
+        }
+
+        Name name = Name.valueOf(args[0]);
+        InstanceInfoField<Object> field = InstanceInfoField.forName(name);
+
+        Object value;
+        if (field.getValueType().equals(Integer.class)) {
+            value = Integer.parseInt(args[1]);
+        } else if (field.getValueType().equals(InstanceInfo.Status.class)) {
+            value = InstanceInfo.Status.valueOf(args[1]);
+        } else {
+            value = args[1];
+        }
+
+        Delta<?> delta = new Builder()
+                .withId(lastInstanceInfo.getId())
+                .withVersion(lastInstanceInfo.getVersion())
+                .withDelta(field, value)
+                .build();
+        lastInstanceInfo = lastInstanceInfo.applyDelta(delta);
+
+        eurekaClient.update(lastInstanceInfo).subscribe(new Subscriber<Void>() {
             @Override
             public void onCompleted() {
-                System.out.println("Registration channel closed");
-                registrationChannel = null;
+                System.out.println("Successfully updated registry information.");
             }
 
             @Override
             public void onError(Throwable e) {
-                System.out.println("Registration channel terminated with an error");
+                System.out.println("ERROR: Registration update failed.");
                 e.printStackTrace();
-                registrationChannel = null;
+                registrationStatus = Status.Failed;
             }
 
             @Override
             public void onNext(Void aVoid) {
+                // No op
             }
         });
-        registrationChannel.register(SampleInstanceInfo.ZuulServer.builder()
-                .withId(Integer.toString(idGenerator.getAndIncrement())).build());
+    }
+
+    private boolean isConnected() {
+        if (eurekaClient == null) {
+            System.out.println("ERROR: connect first to Eureka server");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean expectedRegistrationStatus(Status... statusArray) {
+        if (Sets.asSet(statusArray).contains(registrationStatus)) {
+            return true;
+        }
+        switch (registrationStatus) {
+            case NotStarted:
+                System.out.println("ERROR: Registration not started yet.");
+                break;
+            case Initiated:
+                System.out.println("ERROR: Registration already in progress.");
+                break;
+            case Complete:
+                System.out.println("ERROR: Registration already done.");
+                break;
+            case Failed:
+                System.out.println("ERROR: Previous registration failed.");
+                break;
+        }
+        return false;
+    }
+
+    private void listenForInterest(String[] args) {
+        listenForRegistry(Interests.forVips(args));
+    }
+
+    private void listenForRegistry(final Interest<InstanceInfo> interest) {
+        if (eurekaClient == null) {
+            System.out.println("Not connected");
+            return;
+        }
+
+        switch (registryFetchStatus) {
+            case NotStarted:
+            case Initiated:
+            case Streaming:
+                break;
+            case Complete:
+                System.out.println("ERROR: Registry fetch already done.");
+                return;
+            case Failed:
+                System.out.println("ERROR: Previous registry fetch failed, so proceeding with this request.");
+                break;
+        }
+
+        registryFetchStatus = Status.Initiated;
+        int id = streamId.getAndIncrement();
+        System.out.println("Stream_" + id + ": Subscribing to Interest: " + interest);
+        eurekaClient.forInterest(interest).subscribe(new InterestSubscriber(interest, id));
     }
 
     private void runClose() {
-        if (registrationChannel != null) {
-            System.out.println("Closing registration channel...");
-            registrationChannel.close();
-            registrationChannel = null;
-        }
-        if (eurekaService != null) {
-            // TODO: lifecycle for eureka service?
+        if (eurekaClient != null) {
+            System.out.println("Bye!");
+            eurekaClient.close();
+            eurekaClient = null;
+            registrationStatus = Status.NotStarted;
+            registryFetchStatus = Status.NotStarted;
+            streamId.set(0);
         }
     }
 
     private void runStatus() {
         System.out.println("Status report");
         System.out.println("=============");
-        if (eurekaService == null) {
+        if (eurekaClient == null) {
             System.out.println("Connection status: disconnected");
         } else {
             System.out.println("Connection status: connected");
-            if (registrationChannel == null) {
-                System.out.println("Registration status: unregistered");
-            } else {
-                System.out.println("Registration status: registered");
+            switch (registrationStatus) {
+                case NotStarted:
+                    System.out.println("Registration status: unregistered");
+                    break;
+                case Initiated:
+                    System.out.println("Registration status: Initiated but not completed.");
+                    break;
+                case Complete:
+                    System.out.println("Registration status: registered");
+                    break;
+                case Failed:
+                    System.out.println("Registration status: failed");
+                    break;
             }
+            switch (registryFetchStatus) {
+                case NotStarted:
+                    System.out.println("Registry fetch status: not initiated");
+                    break;
+                case Initiated:
+                    System.out.println("Registry fetch status: Initiated but not completed.");
+                    break;
+                case Streaming:
+                    System.out.println("Registry fetch status: streaming updates from server");
+                    break;
+                case Complete:
+                    System.out.println("Registry fetch status: finished");
+                    break;
+                case Failed:
+                    System.out.println("Registry fetch status: failed");
+                    break;
+            }
+            System.out.println("Registry: " + eurekaClient.toString());
+        }
+    }
+
+    private class InterestSubscriber extends SafeSubscriber<ChangeNotification<InstanceInfo>> {
+        public InterestSubscriber(final Interest<InstanceInfo> interest, final int id) {
+            super(new Subscriber<ChangeNotification<InstanceInfo>>() {
+                @Override
+                public void onCompleted() {
+                    System.out.println("Stream_" + id + ": Interest " + interest + " COMPLETE");
+                }
+
+                @Override
+                public void onError(Throwable e) {
+                    System.out.println("Stream_" + id + ": Interest " + interest + " ERROR: " + e);
+                }
+
+                @Override
+                public void onNext(ChangeNotification<InstanceInfo> notification) {
+                    registryFetchStatus = Status.Streaming;
+                    System.out.println("Stream_" + id + ": Interest " + interest + " NEXT: " + notification);
+                }
+            });
         }
     }
 

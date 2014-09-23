@@ -17,17 +17,24 @@
 dependencies {
     compile project(':eureka-core')
     compile project(':eureka-server')
+    compile project(':eureka-read-server')
+    compile project(':eureka-write-server')
+    compile project(':eureka-extensions:eureka-kafka')
     compile "jline:jline:${jline_version}"
     testCompile "junit:junit:${junit_version}"
 }
 
-jar {
-    manifest {
-        name = 'eureka-test-utils'
-        instruction 'Bundle-Vendor', 'Netflix'
-        instruction 'Bundle-DocURL', 'https://github.com/Netflix/eureka'
-        instruction 'Import-Package', '!org.junit,!junit.framework,!org.mockito.*,*'
-    }
+task runCluster (dependsOn: [classes], type: JavaExec) {
+    group = "Examples"
+    description = "Run Eureka cluster (default -Pwrite=1 -Pread=2)"
+
+    main = "com.netflix.eureka.server.EmbeddedEurekaCluster"
+    classpath = sourceSets.main.runtimeClasspath
+
+    args = [
+            project.hasProperty("write") ? write : 1,
+            project.hasProperty("read") ? read : 2
+    ]
 }
 
 // Why not gradle task? Because of issue https://issues.gradle.org/browse/GRADLE-1147

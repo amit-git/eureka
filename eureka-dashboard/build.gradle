@@ -31,7 +31,6 @@ repositories {
 
 apply plugin: 'clojure'
 clojure.aotCompile = true
-
 uberjar.enabled = true
 
 dependencies {

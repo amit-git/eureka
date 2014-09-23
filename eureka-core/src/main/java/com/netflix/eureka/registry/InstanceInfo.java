@@ -29,7 +29,9 @@ import java.util.Set;
  */
 public class InstanceInfo {
 
-    protected String id;
+    protected final String id;
+    protected final Long version;
+
     protected String appGroup;
     protected String app;
     protected String asg;
@@ -43,11 +45,17 @@ public class InstanceInfo {
     protected String homePageUrl;
     protected String statusPageUrl;
     protected HashSet<String> healthCheckUrls;
-    protected Long version;
-    protected InstanceLocation instanceLocation;
+    protected DataCenterInfo dataCenterInfo;
 
     // for serializers
-    private InstanceInfo() {}
+    private InstanceInfo() {
+        this(null, null);
+    }
+
+    protected InstanceInfo(String id, Long version) {
+        this.id = id;
+        this.version = version;
+    }
 
     /**
      * @return unique identifier of this instance
@@ -162,13 +170,14 @@ public class InstanceInfo {
         return version;
     }
 
-    public InstanceLocation getInstanceLocation() {
-        return instanceLocation;
+    public DataCenterInfo getDataCenterInfo() {
+        return dataCenterInfo;
     }
 
     // ------------------------------------------
     // Non-bean methods
     // ------------------------------------------
+
 
     @Override
     public boolean equals(Object o) {
@@ -180,13 +189,13 @@ public class InstanceInfo {
         if (app != null ? !app.equals(that.app) : that.app != null) return false;
         if (appGroup != null ? !appGroup.equals(that.appGroup) : that.appGroup != null) return false;
         if (asg != null ? !asg.equals(that.asg) : that.asg != null) return false;
+        if (dataCenterInfo != null ? !dataCenterInfo.equals(that.dataCenterInfo) : that.dataCenterInfo != null)
+            return false;
         if (healthCheckUrls != null ? !healthCheckUrls.equals(that.healthCheckUrls) : that.healthCheckUrls != null)
             return false;
         if (homePageUrl != null ? !homePageUrl.equals(that.homePageUrl) : that.homePageUrl != null) return false;
         if (hostname != null ? !hostname.equals(that.hostname) : that.hostname != null) return false;
         if (id != null ? !id.equals(that.id) : that.id != null) return false;
-        if (instanceLocation != null ? !instanceLocation.equals(that.instanceLocation) : that.instanceLocation != null)
-            return false;
         if (ip != null ? !ip.equals(that.ip) : that.ip != null) return false;
         if (ports != null ? !ports.equals(that.ports) : that.ports != null) return false;
         if (securePorts != null ? !securePorts.equals(that.securePorts) : that.securePorts != null) return false;
@@ -218,7 +227,7 @@ public class InstanceInfo {
         result = 31 * result + (statusPageUrl != null ? statusPageUrl.hashCode() : 0);
         result = 31 * result + (healthCheckUrls != null ? healthCheckUrls.hashCode() : 0);
         result = 31 * result + (version != null ? version.hashCode() : 0);
-        result = 31 * result + (instanceLocation != null ? instanceLocation.hashCode() : 0);
+        result = 31 * result + (dataCenterInfo != null ? dataCenterInfo.hashCode() : 0);
         return result;
     }
 
@@ -240,7 +249,7 @@ public class InstanceInfo {
                 ", statusPageUrl='" + statusPageUrl + '\'' +
                 ", healthCheckUrls=" + healthCheckUrls +
                 ", version=" + version +
-                ", instanceLocation=" + instanceLocation +
+                ", dataCenterInfo=" + dataCenterInfo +
                 '}';
     }
 
@@ -250,7 +259,7 @@ public class InstanceInfo {
      * @param delta the delta changes to applyTo
      * @return a new InstanceInfo with the deltas applied
      */
-    public InstanceInfo applyDelta(Delta delta) throws Exception {
+    public InstanceInfo applyDelta(Delta delta) {
         if (!id.equals(delta.getId())) {
             throw new UnsupportedOperationException("Cannot apply delta to instanceInfo with non-matching id: "
                     + delta.getId() + ", " + id);
@@ -269,7 +278,7 @@ public class InstanceInfo {
      * @param another the "newer" instanceInfo
      * @return the set of deltas, or null if the diff is invalid (InstanceInfos are null or id mismatch)
      */
-    public Set<Delta<?>> diffNewer(InstanceInfo another) throws Exception {
+    public Set<Delta<?>> diffNewer(InstanceInfo another) {
         return diff(this, another);
     }
 
@@ -281,11 +290,11 @@ public class InstanceInfo {
      * @param another the "older" instanceInfo
      * @return the set of deltas, or null if the diff is invalid (InstanceInfos are null or id mismatch)
      */
-    public Set<Delta<?>> diffOlder(InstanceInfo another) throws Exception {
+    public Set<Delta<?>> diffOlder(InstanceInfo another) {
         return diff(another, this);
     }
 
-    private static Set<Delta<?>> diff(InstanceInfo oldInstanceInfo, InstanceInfo newInstanceInfo) throws Exception {
+    private static Set<Delta<?>> diff(InstanceInfo oldInstanceInfo, InstanceInfo newInstanceInfo) {
         if (oldInstanceInfo == null || newInstanceInfo == null) {
             return null;
         }
@@ -297,7 +306,8 @@ public class InstanceInfo {
         Set<Delta<?>> deltas = new HashSet<Delta<?>>();
 
         Long newVersion = newInstanceInfo.getVersion();
-        for (InstanceInfoField field : InstanceInfoField.FIELD_MAP.values()) {
+        for (InstanceInfoField.Name fieldName : InstanceInfoField.Name.values()) {
+            InstanceInfoField<Object> field = InstanceInfoField.forName(fieldName);
             Object oldValue = field.getValue(oldInstanceInfo);
             Object newValue = field.getValue(newInstanceInfo);
 
@@ -343,118 +353,147 @@ public class InstanceInfo {
     public static final class Builder {
         private static final Logger logger = LoggerFactory.getLogger(InstanceInfo.Builder.class);
 
-        private InstanceInfo info;
+        private String id;
+        private Long version;
 
-        public Builder() {
-            info = new InstanceInfo();
-        }
+        private String appGroup;
+        private String app;
+        private String asg;
+        private String vipAddress;
+        private String secureVipAddress;
+        private String hostname;
+        private String ip;
+        private HashSet<Integer> ports;
+        private HashSet<Integer> securePorts;
+        private Status status;
+        private String homePageUrl;
+        private String statusPageUrl;
+        private HashSet<String> healthCheckUrls;
+        private DataCenterInfo dataCenterInfo;
 
         public Builder withInstanceInfo(InstanceInfo another) {
-            info.id = another.id;
-            info.appGroup = another.appGroup;
-            info.app = another.app;
-            info.asg = another.asg;
-            info.vipAddress = another.vipAddress;
-            info.secureVipAddress = another.secureVipAddress;
-            info.hostname = another.hostname;
-            info.ip = another.ip;
-            info.ports = another.ports;
-            info.securePorts = another.securePorts;
-            info.status = another.status;
-            info.homePageUrl = another.homePageUrl;
-            info.statusPageUrl = another.statusPageUrl;
-            info.healthCheckUrls = another.healthCheckUrls;
-            info.version = another.version;
-            info.instanceLocation = another.instanceLocation;
+            this.id = another.id;
+            this.version = another.version;
+
+            this.appGroup = another.appGroup;
+            this.app = another.app;
+            this.asg = another.asg;
+            this.vipAddress = another.vipAddress;
+            this.secureVipAddress = another.secureVipAddress;
+            this.hostname = another.hostname;
+            this.ip = another.ip;
+            this.ports = another.ports;
+            this.securePorts = another.securePorts;
+            this.status = another.status;
+            this.homePageUrl = another.homePageUrl;
+            this.statusPageUrl = another.statusPageUrl;
+            this.healthCheckUrls = another.healthCheckUrls;
+            this.dataCenterInfo = another.dataCenterInfo;
             return this;
         }
 
         public Builder withId(String id) {
-            info.id = id;
+            this.id = id;
             return this;
         }
 
         protected Builder withVersion(Long version) {
-            info.version = version;
+            this.version = version;
             return this;
         }
 
         public Builder withAppGroup(String appGroup) {
-            info.appGroup = appGroup;
+            this.appGroup = appGroup;
             return this;
         }
 
         public Builder withApp(String app) {
-            info.app = app;
+            this.app = app;
             return this;
         }
 
         public Builder withAsg(String asg) {
-            info.asg = asg;
+            this.asg = asg;
             return this;
         }
 
         public Builder withVipAddress(String vipAddress) {
-            info.vipAddress = vipAddress;
+            this.vipAddress = vipAddress;
             return this;
         }
 
         public Builder withSecureVipAddress(String secureVipAddress) {
-            info.secureVipAddress = secureVipAddress;
+            this.secureVipAddress = secureVipAddress;
             return this;
         }
 
         public Builder withHostname(String hostname) {
-            info.hostname = hostname;
+            this.hostname = hostname;
             return this;
         }
 
         public Builder withIp(String ip) {
-            info.ip = ip;
+            this.ip = ip;
             return this;
         }
 
         public Builder withPorts(HashSet<Integer> ports) {
-            info.ports = ports;
+            this.ports = ports;
             return this;
         }
 
         public Builder withSecurePorts(HashSet<Integer> securePorts) {
-            info.securePorts = securePorts;
+            this.securePorts = securePorts;
             return this;
         }
 
         public Builder withStatus(Status status) {
-            info.status = status;
+            this.status = status;
             return this;
         }
 
         public Builder withHomePageUrl(String homePageUrl) {
-            info.homePageUrl = homePageUrl;
+            this.homePageUrl = homePageUrl;
             return this;
         }
 
         public Builder withStatusPageUrl(String statusPageUrl) {
-            info.statusPageUrl = statusPageUrl;
+            this.statusPageUrl = statusPageUrl;
             return this;
         }
 
         public Builder withHealthCheckUrls(HashSet<String> healthCheckUrls) {
-            info.healthCheckUrls = healthCheckUrls;
+            this.healthCheckUrls = healthCheckUrls;
             return this;
         }
 
-        public Builder withInstanceLocation(InstanceLocation location) {
-            info.instanceLocation = location;
+        public Builder withInstanceLocation(DataCenterInfo location) {
+            this.dataCenterInfo = location;
             return this;
         }
 
         public InstanceInfo build() {
-            // validate and sanitize
-            if (info.version == null) {
-                info.version = System.currentTimeMillis();
+            if (this.version == null) {
+                this.version = System.currentTimeMillis();
             }
-            return info;
+
+            InstanceInfo result = new InstanceInfo(this.id, this.version);
+            result.appGroup = this.appGroup;
+            result.app = this.app;
+            result.asg = this.asg;
+            result.vipAddress = this.vipAddress;
+            result.secureVipAddress = this.secureVipAddress;
+            result.hostname = this.hostname;
+            result.ip = this.ip;
+            result.ports = this.ports;
+            result.securePorts = this.securePorts;
+            result.status = this.status;
+            result.homePageUrl = this.homePageUrl;
+            result.statusPageUrl = this.statusPageUrl;
+            result.healthCheckUrls = this.healthCheckUrls;
+            result.dataCenterInfo = this.dataCenterInfo;
+
+            return result;
         }
     }
 }

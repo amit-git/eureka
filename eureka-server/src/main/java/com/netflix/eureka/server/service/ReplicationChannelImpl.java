@@ -1,27 +1,36 @@
 package com.netflix.eureka.server.service;
 
-import com.netflix.eureka.interests.ChangeNotification;
+import com.netflix.eureka.registry.EurekaRegistry;
 import com.netflix.eureka.registry.InstanceInfo;
+import com.netflix.eureka.server.transport.ClientConnection;
 import rx.Observable;
 
 /**
  * @author Nitesh Kant
  */
-public class ReplicationChannelImpl extends AbstractChannel implements ReplicationChannel {
+public class ReplicationChannelImpl extends AbstractChannel<ReplicationChannelImpl.STATES> implements ReplicationChannel {
 
-    private final InstanceInfo sourceServer;
+    protected enum STATES {Idle}
 
-    public ReplicationChannelImpl(InstanceInfo sourceServer) {
+    @SuppressWarnings("unused") private final InstanceInfo sourceServer;
+
+    public ReplicationChannelImpl(InstanceInfo sourceServer, ClientConnection transport, EurekaRegistry registry) {
+        super(STATES.Idle, transport, registry, 3, 30000);
         this.sourceServer = sourceServer;
     }
 
     @Override
-    public Observable<ChangeNotification<InstanceInfo>> asObservable() {
-        return Observable.error(new UnsupportedOperationException("Replication not implemented yet.")); // TODO: Replication
+    public Observable<Void> register(InstanceInfo instanceInfo) {
+        return null;
     }
 
     @Override
-    public Observable<Void> asLifecycleObservable() {
-        throw new RuntimeException("not implemented yet");
+    public Observable<Void> update(InstanceInfo newInfo) {
+        return null;
+    }
+
+    @Override
+    public Observable<Void> unregister(String instanceId) {
+        return null;
     }
 }

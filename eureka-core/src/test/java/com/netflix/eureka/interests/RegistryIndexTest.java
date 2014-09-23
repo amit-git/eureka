@@ -1,10 +1,9 @@
 package com.netflix.eureka.interests;
 
-import com.netflix.eureka.SampleChangeNotification;
-import com.netflix.eureka.registry.SampleInstanceInfo;
 import com.netflix.eureka.registry.EurekaRegistry;
+import com.netflix.eureka.registry.EurekaRegistryImpl;
 import com.netflix.eureka.registry.InstanceInfo;
-import com.netflix.eureka.registry.LeasedInstanceRegistry;
+import com.netflix.eureka.registry.SampleInstanceInfo;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExternalResource;
@@ -13,6 +12,9 @@ import rx.functions.Action1;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.netflix.eureka.interests.Interests.forFullRegistry;
+import static com.netflix.eureka.interests.Interests.forInstance;
+import static com.netflix.eureka.interests.Interests.forSome;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
@@ -22,14 +24,17 @@ import static org.hamcrest.Matchers.hasSize;
  */
 public class RegistryIndexTest {
 
-    private EurekaRegistry registry;
+    private static final InstanceInfo discoveryServer = SampleInstanceInfo.DiscoveryServer.build();
+    private static final InstanceInfo zuulServer = SampleInstanceInfo.ZuulServer.build();
+
+    private EurekaRegistry<InstanceInfo> registry;
 
     @Rule
     public final ExternalResource registryResource = new ExternalResource() {
 
         @Override
         protected void before() throws Throwable {
-            registry = new LeasedInstanceRegistry(SampleInstanceInfo.DiscoveryServer.build());
+            registry = new EurekaRegistryImpl();
         }
 
         @Override
@@ -40,13 +45,19 @@ public class RegistryIndexTest {
 
     @Test
     public void testBasicIndex() throws Exception {
-        final List<ChangeNotification<InstanceInfo>> notifications = new ArrayList<ChangeNotification<InstanceInfo>>();
+        doTestWithIndex(forFullRegistry());
+    }
 
-        InstanceInfo discoveryServer = SampleInstanceInfo.DiscoveryServer.build();
-        InstanceInfo zuulServer = SampleInstanceInfo.ZuulServer.build();
+    @Test
+    public void testCompositeIndex() throws Exception {
+        doTestWithIndex(forSome(forInstance(discoveryServer.getId()), forInstance(zuulServer.getId())));
+    }
+
+    private void doTestWithIndex(Interest<InstanceInfo> interest) {
+        final List<ChangeNotification<InstanceInfo>> notifications = new ArrayList<>();
 
         registry.register(discoveryServer).toBlocking().lastOrDefault(null);
-        registry.forInterest(Interests.forFullRegistry())
+        registry.forInterest(interest)
                 .subscribe(new Action1<ChangeNotification<InstanceInfo>>() {
                     @Override
                     public void call(ChangeNotification<InstanceInfo> notification) {
@@ -59,6 +70,6 @@ public class RegistryIndexTest {
         assertThat(notifications, hasSize(2));
         assertThat(notifications,
                 contains(SampleChangeNotification.DiscoveryAdd.newNotification(discoveryServer),
-                         SampleChangeNotification.ZuulAdd.newNotification(zuulServer))); // Checks the order of notifications.
+                        SampleChangeNotification.ZuulAdd.newNotification(zuulServer))); // Checks the order of notifications.
     }
 }
