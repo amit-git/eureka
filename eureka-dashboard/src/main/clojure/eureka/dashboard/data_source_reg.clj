@@ -75,9 +75,12 @@
               ro (Observable/timer 0 1 TimeUnit/MINUTES)
               ts (rx/subscribe ro
                    (fn [v]
-                     (log/debug "Making async call for " (:metric-url data-src))
-                     (http/get (:metric-url data-src)
-                       (fn [res] (.onNext bs (build-atlas-data res data-src))))))]
+                     (try
+                       (do
+                         (log/debug "Making async call for " (:metric-url data-src))
+                         (http/get (:metric-url data-src)
+                           (fn [res] (.onNext bs (build-atlas-data res data-src)))))
+                       (catch Exception e (println "Exception in fetching metric " (:name data-src) e)))))]
           (reset! observable bs)
           (swap! timer-subscriptions conj ts)
           bs)

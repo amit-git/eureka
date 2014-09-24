@@ -94,10 +94,13 @@
               ts (rx/subscribe ro
                    ; on next
                    (fn [v]
-                     (let [system-status (<!! (get-data-stream))]
-                       (->> {:source "discovery" :values system-status}
-                         (json/write-str)
-                         (.onNext bs))))
+                     (try
+                       (let [system-status (<!! (get-data-stream))]
+                         (->> {:source "discovery" :values system-status}
+                           (json/write-str)
+                           (.onNext bs)))
+                       (catch Exception ex
+                         (log/debug "Exception in get-data-stream " (.printStackTrace ex)))))
                    ; on error
                    (fn [v]
                      (.onError bs)))]

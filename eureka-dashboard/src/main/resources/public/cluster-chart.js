@@ -36,7 +36,7 @@ function ClusterStatusChart(options) {
 
     function render() {
         var g = svg.selectAll(".arc")
-                .data(pie(data), function(d) {return d.data.eip;})
+                .data(pie(data), function(d) {return d.data.eip + '_' + d.data.status;})
                 .enter().append("g")
                 .attr("class", "arc")
                         .on("mouseover", function(d) { d3.select(this).attr('cursor', 'pointer')})

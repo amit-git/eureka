@@ -33,6 +33,8 @@ apply plugin: 'clojure'
 clojure.aotCompile = true
 uberjar.enabled = true
 
+apply plugin: 'osgi'
+
 dependencies {
     compile "http-kit:http-kit:2.1.18"
     compile 'org.clojure:clojure:1.5.1'
