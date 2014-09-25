@@ -5,6 +5,7 @@ function MetricsChart(options) {
     var width = options.width || 540;
     var height = options.height || 240;
     var palette = new Rickshaw.Color.Palette();
+    var utils = Utils();
 
     var data = [];
 
@@ -48,7 +49,7 @@ function MetricsChart(options) {
     var webSocket;
 
     function loadData(dataSrc) {
-        webSocket = new WebSocket("ws://localhost:9000/sub");
+        webSocket = new WebSocket('ws://' + utils.getCurrentPageDomain() +'/sub');
 
         webSocket.onopen = function (evt) {
             console.log("On open (" + dataSrc + ")");

@@ -24,6 +24,16 @@
   (let [{cmd "cmd" ds "ds"} (json/read-str client-req)]
     {:name ds}))
 
+(defn healthcheck-handler [req]
+  (if (nil? @server)
+    {:status  500
+     :headers {"Content-Type" "text/html"}
+     :body    "Server did not start properly."}
+    {:status  200
+     :headers {"Content-Type" "text/html"}
+     :body    "Good to go"})
+  )
+
 (defn web-socket-handler [request]
   (with-channel request channel
     (on-close channel (fn [status] (log/debug "channel closed: " status) (sub-svr/unsubscribe channel)))
@@ -35,6 +45,7 @@
 (defroutes all-routes
   "Composure routes defined including web socket handler"
   (GET "/sub" [] web-socket-handler) ;; websocket
+  (GET "/healthcheck" [] healthcheck-handler)
   (route/resources "/")
   (route/not-found "<p>Page not found.</p>"))
 
@@ -62,16 +73,20 @@
   (discovery/shutdown-discovery-stream)
   (data-sources/shutdown))
 
+(defn bootstrap
+  [port]
+  (log/info (str "Starting websocket server on port " port))
+  (start-app-server port)
+  (future (reset! nrepl-server (nrepl/start-server :port 7888)))
+  (discovery/init-discovery-stream)
+  (data-sources/init-atlas-datasources)
+  (log/info "Data sources initialized"))
+
 
 (defn -main [& args]
   (let [port (Integer/parseInt (first args))]
-    (log/info (str "Starting websocket server on port " port))
-    (start-app-server port)
-    (future (reset! nrepl-server (nrepl/start-server :port 7888)))
-    (discovery/init-discovery-stream)
-    (data-sources/init-atlas-datasources)
-    (log/info "Data sources initialized")))
+    (bootstrap port)))
 
 (comment
-  (-main "9000")
+  (-main "8080")
   (shutdown))

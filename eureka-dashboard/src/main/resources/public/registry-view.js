@@ -4,6 +4,7 @@ function RegistryView(options) {
     var diameter = options.diameter || 660;
     var registry = [];
     var root = { children: [] };
+    var utils = Utils();
 
     var format = d3.format(",d"),
             color = d3.scale.category20c();
@@ -23,7 +24,8 @@ function RegistryView(options) {
     }
 
     function loadData(callback) {
-        var ws = new WebSocket("ws://localhost:9000/sub");
+        var ws = new WebSocket('ws://' + utils.getCurrentPageDomain() +'/sub');
+
         ws.onopen = function () {
             ws.send(JSON.stringify({cmd: 'getStream', ds: 'discovery', refreshMin: 5}));
         };

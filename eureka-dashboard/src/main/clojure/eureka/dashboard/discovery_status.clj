@@ -100,9 +100,10 @@
                            (json/write-str)
                            (.onNext bs)))
                        (catch Exception ex
-                         (log/debug "Exception in get-data-stream " (.printStackTrace ex)))))
+                         (log/debug "Exception in get-data-stream " ex))))
                    ; on error
                    (fn [v]
+                     (log/debug "Error from timer sub ? should not happen.")
                      (.onError bs)))]
           (reset! timer-subscription ts)
           (reset! observable bs)
@@ -115,8 +116,11 @@
 (defn shutdown-discovery-stream [] (.unsubscribe @timer-subscription))
 
 (comment
-  (get-system-status)
-  (<!! (get-discovery-eips))
+  (rx/subscribe (get-discovery-stream)
+    (fn[v]
+      (println "Value from observable " v)))
+
+  (<!! (get-data-stream))
   (<!! (go
          (->>
            (get-discovery-eips)
