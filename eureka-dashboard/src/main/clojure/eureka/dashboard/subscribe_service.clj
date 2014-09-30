@@ -19,15 +19,15 @@
   ([channel data-src-name]
     "unsubscribe data source from channel"
     (if-let [sub (get @subscriptions {:ch channel :ds data-src-name})]
-      (.unsubscribe sub)))
+      (do
+        (.unsubscribe sub)
+        (swap! subscriptions dissoc {:ch channel :ds data-src-name})
+        )))
 
   ([channel]
     "unsubscribe all data sources for a channel"
-    (map
-      (fn
-        [sub-entry]
-        (let [[{ch :ch ds :ds} _] sub-entry]
+    (doseq [key (keys @subscriptions)]
+      (let [{ch :ch ds :ds} key]
           (when (= ch channel)
-            (unsubscribe ch ds))))
-      @subscriptions)))
+            (unsubscribe ch ds))))))
 

@@ -89,4 +89,5 @@
 
 (comment
   (-main "8080")
+  (bootstrap 8080)
   (shutdown))

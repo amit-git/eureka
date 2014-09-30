@@ -3,43 +3,32 @@
            [java.util.concurrent TimeUnit]
            [rx.subjects BehaviorSubject])
   (:use [clojure.core.async :only [go put! <! >! chan <!!]])
-  (:require [org.httpkit.client :as http]
+  (:require [eureka.dashboard.http-client-wrap :as http]
+            [eureka.dashboard.eip-list :as eip-list]
             [rx.lang.clojure.core :as rx]
             [clojure.tools.logging :as log]
-            [eureka.dashboard.cloud-env :as cloud-env]
             [clojure.data.json :as json]))
 
 (def lease-expiration-str "Lease expiration enabled: true")
 (def timer-subscription (atom nil))
-(def system-env (cloud-env/getEnv))
 
-(defn http-get [url]
+
+(defn http-get [{:keys [url jsonout]}]
   (let [c (chan)]
     (log/debug "Fetching " url)
-    (http/get url
-      (fn [r] (put! c r)))
+    (http/http-get {:url url :callback (fn [r] (put! c r)) :jsonout jsonout})
     c))
 
-(defn get-discovery-eips
-  []
-  (go
-    (let [json-payload (-> (format "http://eipapi.%s.netflix.net/api/v1/eip/%s" (:env system-env) (:region system-env))
-                         http-get
-                         <!
-                         :body (json/read-str))]
-      (->> json-payload
-        (filter
-          (fn [[_ v]] (= v "discovery")))
-        (map first)))))
+(defn http-get-json [url] (http-get {:url url :jsonout true}))
+(defn http-get-raw [url] (http-get {:url url :jsonout false}))
 
 
 (defn get-discovery-status
   [eip]
   (go
     (let [status-page (-> (format "http://%s:7001/discovery" eip)
-                        http-get
-                        <!
-                        :body)
+                        http-get-raw
+                        <!)
           zone-match (re-find #"Zone: ([\w\d-]*)" status-page)
           status (.contains status-page lease-expiration-str)]
       (if status
@@ -52,9 +41,8 @@
   [inst]
   (go
     (let [apps-json-resp (-> (format "http://%s:8077/v1/platform/base/discovery" inst)
-                           http-get
-                           <!
-                           :body (json/read-str :key-fn keyword))
+                           http-get-json
+                           <!)
           apps-full-rec (get-in apps-json-resp [:discovery :rows])
           apps-short (map
                        (fn [[app inst status]] ; extract first three values
@@ -76,7 +64,7 @@
 (defn get-data-stream
   []
   (go
-    (let [eips (<! (get-discovery-eips))
+    (let [eips (eip-list/get-eips)
           eip-status-chans (map get-discovery-status eips)
           async-res-chan (clojure.core.async/map vector eip-status-chans)
           servers (<! async-res-chan)
@@ -116,26 +104,13 @@
 (defn shutdown-discovery-stream [] (.unsubscribe @timer-subscription))
 
 (comment
+  (<!! (get-discovery-eips))
   (rx/subscribe (get-discovery-stream)
-    (fn[v]
+    (fn [v]
       (println "Value from observable " v)))
 
   (<!! (get-data-stream))
-  (<!! (go
-         (->>
-           (get-discovery-eips)
-           <!
-           (map get-discovery-status)
-           )))
 
-  (<!! (go
-         (let [eips (<! (get-discovery-eips))
-               eip-status-chans (map get-discovery-status eips)
-               async-res-chan (clojure.core.async/map vector eip-status-chans)
-               servers (<! async-res-chan)
-               eip-up-inst (first (filter #(= "G" (:status %)) servers))
-               reg-snapshot (<! (get-discovery-snapshot (:eip eip-up-inst)))]
-           {:servers servers :registry reg-snapshot})))
   (def s-obr (get-observable-stream))
   (def sub (rx/subscribe s-obr (fn [ss] (println "Got system status " ss))))
   (.unsubscribe sub))
