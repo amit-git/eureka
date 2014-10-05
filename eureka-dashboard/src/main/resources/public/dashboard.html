@@ -52,6 +52,12 @@
       text-align: center;
     }
 
+    #region-select {
+      position: absolute;
+      right: 30px;
+      display: none;
+    }
+
   </style>
   <link type="text/css" rel="stylesheet" href="lib/rickshaw.min.css"/>
   <script src="lib/d3.v3.js"></script>
@@ -60,6 +66,7 @@
   <script src="cluster-chart.js"></script>
   <script src="metrics-chart.js"></script>
   <script src="registry-view.js"></script>
+  <script src="region-select.js"></script>
 
   <title>Discovery Dashboard</title>
 </head>
@@ -92,7 +99,8 @@
       var metricsChart = MetricsChart({
         containerId: 'error-5xx',
         width      : 350,
-        height     : 150
+        height     : 150,
+        chartType  : 'bar'
       });
       metricsChart.loadData("error-5xx");
       metricsChart.render();
@@ -109,34 +117,36 @@
       registryView.render();
       clustersView.loadData(data.values.servers).render();
     });
+
+    RegionSelector().init();
   }
 
 </script>
 
 <div class="main-cont">
   <div id="left-col">
-    <section><h2>Discovery cluster</h2>
-
+    <section>
+      <h2>Discovery cluster</h2>
       <div id="cluster-view"></div>
     </section>
-    <section><h3>Number of active connections</h3>
-
+    <section>
+      <h3>Number of active connections</h3>
       <div id="num-conn-metric">
         <div id="num-conn-y_axis"></div>
         <div id="num-conn"></div>
       </div>
     </section>
 
-    <section><h3>Registry size</h3>
-
+    <section>
+      <h3>Registry size</h3>
       <div id="reg-size-metric">
         <div id="reg-size-y_axis"></div>
         <div id="reg-size"></div>
       </div>
     </section>
 
-    <section><h3>5xx count</h3>
-
+    <section>
+      <h3>5xx count</h3>
       <div id="error-5xx-metric">
         <div id="error-5xx-y_axis"></div>
         <div id="error-5xx"></div>
@@ -145,8 +155,9 @@
   </div>
 
   <div id="right-col">
-    <section><h2>Registry</h2>
+    <section id="region-select"></section>
 
+    <section><h2>Registry</h2>
       <div id="reg-view"></div>
     </section>
   </div>

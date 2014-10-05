@@ -11,8 +11,6 @@
             [rx.lang.clojure.core :as rx]
             [clojure.data.json :as json]))
 
-(def rand-num (java.util.Random.))
-
 (def system-env (cloud-env/getEnv))
 (def atlas-5xx-count-metric-f "http://%s:7001/api/v2/fetch?q=nf.region,%s,:eq,nf.app,discovery,:eq,:and,name,EpicAgent_ApacheAccessLog_all_5xx_Count,:eq,:and,:sum&e=now-5m&s=e-3h")
 (def atlas-connections-metric-f "http://%s:7001/api/v2/fetch?q=nf.region,%s,:eq,nf.app,discovery,:eq,:and,state,Keepalive,:eq,:and,name,Scoreboard,:eq,:and,:sum&e=now-5m&s=e-3h")
@@ -92,9 +90,6 @@
 
 ; get data returns an Observable - specifically BehaviorSubject
 (defmulti get-data :name)
-
-(defmethod get-data :default [data-src]
-  (.nextInt rand-num 10))
 
 (defmethod get-data "discovery" [data-src]
   (discovery/get-discovery-stream))

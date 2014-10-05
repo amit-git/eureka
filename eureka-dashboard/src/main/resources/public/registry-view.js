@@ -76,7 +76,7 @@ function RegistryView(options) {
                     d3.select(this).style('cursor', 'pointer');
                 });
 
-        node.append("text")
+        var labels = node.append("text")
                 .attr("dy", ".3em")
                 .style("text-anchor", "middle")
                 .text(function (d) {
@@ -86,6 +86,17 @@ function RegistryView(options) {
                     return "";
                 }).on('mouseover', function (d) {
                     d3.select(this).style('cursor', 'pointer');
+                });
+
+        labels.append('tspan')
+                .attr('y', function(d) { return (d.r/2.0); })
+                .attr('x', '0')
+                .style("text-anchor", "middle")
+                .text(function (d) {
+                    if (d.r > 20) {
+                        return format(d.value);
+                    }
+                    return '';
                 });
 
         // remove nodes on exit

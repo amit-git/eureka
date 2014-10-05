@@ -63,13 +63,15 @@
     (nrepl/stop-server @nrepl-server)
     (reset! nrepl-server nil)))
 
+(defn start-nrepl-server []
+  (future (reset! nrepl-server (nrepl/start-server :port 7888))))
+
 (defn start-app-server [port]
   (reset! server (run-server #'app {:port port})))
 
 (defn shutdown
   []
   (stop-app-server)
-  (stop-nrepl-server)
   (discovery/shutdown-discovery-stream)
   (data-sources/shutdown))
 
@@ -77,7 +79,6 @@
   [port]
   (log/info (str "Starting websocket server on port " port))
   (start-app-server port)
-  (future (reset! nrepl-server (nrepl/start-server :port 7888)))
   (discovery/init-discovery-stream)
   (data-sources/init-atlas-datasources)
   (log/info "Data sources initialized"))
@@ -85,7 +86,8 @@
 
 (defn -main [& args]
   (let [port (Integer/parseInt (first args))]
-    (bootstrap port)))
+    (bootstrap port)
+    (start-nrepl-server)))
 
 (comment
   (-main "8080")

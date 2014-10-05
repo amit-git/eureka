@@ -15,12 +15,27 @@
   (get-in eip-list [(keyword (:env system-env))
                     (keyword (:region system-env))]))
 
+(defn replace-dots [eip] (.replace eip "." "-"))
+
+(defn get-ec2-names
+  []
+  (map
+    (fn [eip]
+      (cond
+        (= (:region system-env) "us-east-1") (str "ec2-" (replace-dots eip) ".compute-1.amazonaws.com")
+        :else (str "ec2-" (replace-dots eip) "." (:region system-env) ".compute.amazonaws.com")))
+    (get-eips)))
+
 (defn pick-rand-eip []
-  (let [eips (get-eips)
+  (let [eips (get-ec2-names)
         len (count eips)
         rand-index (rand-int len)]
     (nth eips rand-index)))
 
 (comment
   (get-eips)
-  (pick-rand-eip))
+  (get-ec2-names)
+  (pick-rand-eip)
+  (def system-env {:env "test" :region "us-east-1"})
+
+  (def r "us-east-1x"))

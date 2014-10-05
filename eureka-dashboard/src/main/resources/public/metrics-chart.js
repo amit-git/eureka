@@ -4,6 +4,7 @@ function MetricsChart(options) {
     var yAxisId = options.yAxisId || (containerId + '-y_axis');
     var width = options.width || 540;
     var height = options.height || 240;
+    var chartType = options.chartType || 'line';
     var palette = new Rickshaw.Color.Palette();
     var utils = Utils();
 
@@ -16,10 +17,10 @@ function MetricsChart(options) {
             element : document.querySelector("#" + containerId),
             width   : width,
             height  : height,
-            renderer: 'line',
+            renderer: chartType,
             series  : new Rickshaw.Series([
                 {
-                    name : "Northeast",
+                    name : "",
                     data : data,
                     color: palette.color()
                 }
@@ -35,6 +36,16 @@ function MetricsChart(options) {
             element    : document.getElementById(yAxisId)
         });
 
+        var hoverDetail = new Rickshaw.Graph.HoverDetail({
+            graph: graph,
+            // x value formatter
+            xFormatter : function(x) { return new Date( x * 1000 ).toLocaleTimeString(); },
+
+            // label formatter
+            formatter : function(series, x, y, formattedX, formattedY, d) {
+                return formattedY;
+            }
+        });
     }
 
     function render() {

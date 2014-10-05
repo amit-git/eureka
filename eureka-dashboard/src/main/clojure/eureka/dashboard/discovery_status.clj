@@ -64,8 +64,8 @@
 (defn get-data-stream
   []
   (go
-    (let [eips (eip-list/get-eips)
-          eip-status-chans (map get-discovery-status eips)
+    (let [discovery-hosts (eip-list/get-ec2-names)
+          eip-status-chans (map get-discovery-status discovery-hosts)
           async-res-chan (clojure.core.async/map vector eip-status-chans)
           servers (<! async-res-chan)
           eip-up-inst (first (filter #(= "G" (:status %)) servers))
@@ -107,7 +107,7 @@
   (<!! (get-discovery-eips))
   (rx/subscribe (get-discovery-stream)
     (fn [v]
-      (println "Value from observable " v)))
+      (println "value from observable " v)))
 
   (<!! (get-data-stream))
 
