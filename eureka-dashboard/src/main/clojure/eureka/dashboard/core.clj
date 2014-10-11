@@ -100,6 +100,4 @@
 (comment
   (-main "8080")
   (bootstrap 8080)
-
-  (get-env "")
   (shutdown))

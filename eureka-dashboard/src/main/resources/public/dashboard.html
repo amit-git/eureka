@@ -3,11 +3,13 @@
 
   <link type="text/css" rel="stylesheet" href="lib/rickshaw.min.css"/>
   <link href="lib/css/bootstrap.min.css" rel="stylesheet">
+  <link href="lib/css/jquery-ui.min.css" rel="stylesheet">
 
   <script src="lib/d3.v3.js"></script>
   <script src="lib/rickshaw.min.js"></script>
 
   <script src="lib/jquery.min.js"></script>
+  <script src="lib/jquery-ui.min.js"></script>
   <script src="lib/bootstrap.min.js"></script>
 
   <script src="utils.js"></script>
@@ -99,6 +101,10 @@
       display: none;
     }
 
+    #inst-list {
+      float: left;
+    }
+
     .inst-list-cont h4 {
       text-decoration: underline;
     }
@@ -107,6 +113,15 @@
       padding-left: 5px;
       width: 200px;
       border: 1px dashed darkgray;
+    }
+
+    #search-box-cont .col-lg-4 {
+      float: none;
+      padding-left: 0;
+    }
+
+    #region {
+      margin-left: 5px;
     }
 
   </style>
@@ -207,6 +222,12 @@
       <h4 class="reg-count">total instance count : <span class="val"></span></h4>
 
       <div id="reg-view"></div>
+
+      <div id="search-box-cont">
+        <div class="col-lg-4">
+          <input type="text" class="form-control input-small" id="search-app" placeholder="Search instances for app">
+        </div>
+      </div>
 
       <section class="inst-list-cont">
         <h4>Instances for app <span class="app"></span></h4>
