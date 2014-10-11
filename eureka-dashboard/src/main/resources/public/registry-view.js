@@ -3,8 +3,9 @@ function RegistryView(options) {
     var containerId = options.containerId || 'registry';
     var diameter = options.diameter || 660;
     var registry = [];
+    var appIdToRegistryMap = {};
     var root = { children: [] };
-    var utils = Utils();
+    var totalInstCount = 0;
 
     var format = d3.format(",d"),
             color = d3.scale.category20c();
@@ -19,12 +20,14 @@ function RegistryView(options) {
             .attr("height", diameter)
             .attr("class", "bubble");
 
+    var instancesTblView; // ref to SimpleTreeView for instance list
+
     function clear() {
         d3.select('#' + containerId).clear();
     }
 
     function loadData(callback) {
-        var ws = new WebSocket('ws://' + utils.getCurrentPageDomain() +'/sub');
+        var ws = new WebSocket('ws://' + Utils.getCurrentPageDomain() +'/sub');
 
         ws.onopen = function () {
             ws.send(JSON.stringify({cmd: 'getStream', ds: 'discovery', refreshMin: 5}));
@@ -34,6 +37,7 @@ function RegistryView(options) {
             console.log("Got discovery data stream");
             var data = JSON.parse(evt.data);
             registry = data.values.registry;
+            appIdToRegistryMap = {};
             if (callback) callback(data);
         };
 
@@ -44,8 +48,46 @@ function RegistryView(options) {
         var regItem, i;
         for (i = 0; i < registry.length; i++) {
             regItem = registry[i];
-            root.children.push({name: regItem[0], value: regItem[1]});
+            root.children.push({name: regItem['app'], value: regItem['count']});
+            totalInstCount += regItem['count'];
+            appIdToRegistryMap[regItem['app']] = regItem;
         }
+    }
+
+    function sortRegistryData() {
+        registry.sort(function (a, b) {
+            return b['count'] - a['count'];
+        });
+    }
+
+    function showTotalCount() {
+        var regCntElm = d3.select('.reg-count');
+        regCntElm.select('.val').text(totalInstCount);
+        regCntElm.style('display', 'block');
+    }
+
+    function showInstanceList(app, instances) {
+        console.log("Instances ");
+        console.log(instances);
+        instancesTblView = SimpleTreeView({contId: 'inst-list', data: buildInstanceNACLinks(instances)});
+        instancesTblView.init();
+
+        $('.inst-list-cont .app').html('&ldquo;' + app.toLowerCase() + '&rdquo;');
+        $('.inst-list-cont').show();
+    }
+
+    function buildInstanceNACLinks(instances) {
+        var instListOut = [];
+        Object.keys(instances).forEach(function(stat) {
+            var instList = instances[stat];
+            var instListWithLinks = [];
+            instList.forEach(function (inst) {
+                instListWithLinks.push(Utils.buildNACLinkForInstance(inst));
+            });
+
+            instListOut[stat] = instListWithLinks;
+        });
+        return instListOut;
     }
 
     function renderBubbleChart() {
@@ -74,6 +116,8 @@ function RegistryView(options) {
                     return color(d.name);
                 }).on('mouseover', function (d) {
                     d3.select(this).style('cursor', 'pointer');
+                }).on('click', function(d) {
+                    showInstanceList(d.name, appIdToRegistryMap[d.name].instances || []);
                 });
 
         var labels = node.append("text")
@@ -86,6 +130,8 @@ function RegistryView(options) {
                     return "";
                 }).on('mouseover', function (d) {
                     d3.select(this).style('cursor', 'pointer');
+                }).on('click', function(d) {
+                    showInstanceList(d.name, appIdToRegistryMap[d.name].instances || []);
                 });
 
         labels.append('tspan')
@@ -107,8 +153,10 @@ function RegistryView(options) {
 
     return {
         render     : function () {
+            sortRegistryData();
             buildFlattenedTree();
             renderBubbleChart();
+            showTotalCount();
         },
         loadData   : loadData,
         getRegistry: function () {

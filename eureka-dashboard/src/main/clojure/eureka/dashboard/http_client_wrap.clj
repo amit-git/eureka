@@ -23,7 +23,7 @@
       (let [{:keys [status headers body error _]} res]
         (if (not (= status 200))
           (do
-            (log/debug "Error (" status ") in calling " url " error => " error)
+            (log/error "Error  (" status ") in calling " url " error => " error)
             (do-callback "" jsonout callback))
           (do-callback body jsonout callback))
         ))))

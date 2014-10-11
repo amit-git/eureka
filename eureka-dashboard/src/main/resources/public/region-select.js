@@ -19,11 +19,12 @@ function RegionSelector(opts) {
 
     function getRegion(loc) {
         var regionResult = /us-east-1|us-west-2|eu-west-1/.exec(loc);
-        return (regionResult ? regionResult[0] : '');
+        return (regionResult ? regionResult[0] : 'us-east-1');
     }
 
     function init() {
-        d3.select('#' + contId).html(buildMarkup());
+        var initRegion = getCurrentRegion();
+        d3.select('#' + contId).html(buildMarkup(initRegion));
         d3.select('#' + contId + ' select').on('change', function() {
             var targetRegion = this.selectedOptions[0].value;
             console.log("Switching to " + targetRegion);
@@ -31,15 +32,29 @@ function RegionSelector(opts) {
         });
     }
 
-    function buildMarkup() {
-        return '<div>' +
+    function getCurrentRegion() {
+        return getRegion(getCurrentPage());
+    }
+
+    function buildMarkup(initRegion) {
+        var markup = [];
+        var regions = ['us-east-1', 'us-west-2', 'eu-west-1'];
+        var i, selectedText = "";
+
+        markup.push('<div>' +
             '<label for="region">Region</label>' +
-            '<select name="region" id="region">' +
-                '<option value="us-east-1">us-east-1</option>' +
-                '<option value="us-west-2">us-west-2</option>' +
-                '<option value="eu-west-1">eu-west-1</option>' +
-            '</select>' +
-        '</div>';
+            '<select name="region" id="region">');
+
+
+        for (i = 0; i < regions.length; i++) {
+            selectedText = regions[i] === initRegion ? 'selected="true"' : '';
+            markup.push('<option value="' + regions[i] + '"' + selectedText + '>' + regions[i] + '</option>');
+        }
+
+        markup.push('</select>');
+        markup.push('</div>');
+
+        return markup.join('');
     }
 
 

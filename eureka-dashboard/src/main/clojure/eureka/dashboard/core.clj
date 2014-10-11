@@ -11,6 +11,7 @@
   (:require [org.httpkit.client :as http-client]
             [clojure.tools.logging :as log]
             [eureka.dashboard.subscribe-service :as sub-svr]
+            [eureka.dashboard.cloud-env :as cloud-env]
             [clojure.data.json :as json]
             [eureka.dashboard.data-source-reg :as data-sources]
             [eureka.dashboard.discovery-status :as discovery]))
@@ -34,6 +35,12 @@
      :body    "Good to go"})
   )
 
+(defn get-env [req]
+  (let [env (cloud-env/getEnv)]
+    {:status 200
+     :headers {"Content-Type" "application/json"}
+     :body (json/write-str env)}))
+
 (defn web-socket-handler [request]
   (with-channel request channel
     (on-close channel (fn [status] (log/debug "channel closed: " status) (sub-svr/unsubscribe channel)))
@@ -46,6 +53,7 @@
   "Composure routes defined including web socket handler"
   (GET "/sub" [] web-socket-handler) ;; websocket
   (GET "/healthcheck" [] healthcheck-handler)
+  (GET "/getenv" [] get-env)
   (route/resources "/")
   (route/not-found "<p>Page not found.</p>"))
 
@@ -92,4 +100,6 @@
 (comment
   (-main "8080")
   (bootstrap 8080)
+
+  (get-env "")
   (shutdown))

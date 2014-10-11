@@ -37,6 +37,18 @@
         ; self preservation
         {:eip eip :zone (second zone-match) :status "Y"}))))
 
+
+(defn group-by-status
+  "group instances by their status. Returns a map containing status -> [list of instance ids]"
+  [inst-list]
+  (->>
+    (group-by :status inst-list)
+    (map
+      (fn [[stat inst-list-with-stat]]
+        (let [inst-list (mapv :instance inst-list-with-stat)]
+          {stat inst-list})))
+    (into {})))
+
 (defn get-discovery-snapshot
   [inst]
   (go
@@ -48,18 +60,13 @@
                        (fn [[app inst status]] ; extract first three values
                          ;(let [[app inst status :as entire-rec] app-rec]
                          {:app app :instance inst :status status})
-                       apps-full-rec)
-          apps-up-status (filter #(= "UP" (:status %)) apps-short)
-          app-inst-pairs (map #(dissoc % :status) apps-up-status)
-          only-apps (map :app app-inst-pairs)]
-      (->>
-        (reduce
-          ; app frequency count map
-          #(assoc %1 %2 (inc (%1 %2 0)))
-          {} ; initial count map
-          only-apps)
-        ; sort by second field ie count
-        (sort-by second >)))))
+                       apps-full-rec)]
+      (map
+        (fn [[appId inst-list]]
+          (let [no-app-inst-list (map #(dissoc % :app) inst-list)]
+            {:app appId :count (count inst-list) :instances (group-by-status no-app-inst-list)}
+            ))
+        (group-by :app apps-short)))))
 
 (defn get-data-stream
   []
@@ -113,5 +120,33 @@
 
   (def s-obr (get-observable-stream))
   (def sub (rx/subscribe s-obr (fn [ss] (println "Got system status " ss))))
-  (.unsubscribe sub))
+  (.unsubscribe sub)
+  (<!! (get-discovery-snapshot "ec2-54-205-23-0.compute-1.amazonaws.com"))
+
+  (def apps [{:app "map" :instance "i-1" :status "UP"}
+             {:app "map" :instance "i-4" :status "STARTING"}
+             {:app "api" :instance "i-7" :status "STARTING"}
+             {:app "vms" :instance "i-10" :status "UP"}
+             {:app "vms" :instance "i-12" :status "OOS"}
+             {:app "vms" :instance "i-22" :status "UP"}
+             {:app "api" :instance "i-33" :status "UP"}])
+
+  (map
+    (fn [[appId inst-list]]
+      (let [no-app-inst-list (map #(dissoc % :app) inst-list)]
+        {:app appId :count (count inst-list) :instances (group-by-status no-app-inst-list)}
+        ))
+    (group-by :app apps))
+
+
+
+  (group-by-status [{:status "UP" :instance "i-1"}
+                    {:instance "i-33" :status "STARTING"}
+                    {:instance "i-30" :status "STARTING"}
+                    {:instance "i-20" :status "UP"}
+                    {:status "BAD" :instance "i-20"}])
+
+
+
+  )
 
