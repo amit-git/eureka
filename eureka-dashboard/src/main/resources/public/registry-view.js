@@ -49,6 +49,7 @@ function RegistryView(options) {
 
     function buildFlattenedTree() {
         var regItem, i;
+        totalInstCount = 0;
         for (i = 0; i < registry.length; i++) {
             regItem = registry[i];
             root.children.push({name: regItem['app'], value: regItem['count']});
